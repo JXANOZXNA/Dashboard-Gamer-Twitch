@@ -2,7 +2,7 @@ import httpx
 
 # 1. Tus credenciales reales aquí
 CLIENT_ID = '5ur4pbx6nnf2zu8sst4k71xrq4bnyj'
-CLIENT_SECRET = '1rrs4zf3nnglrfie2h14tm1dqj6gqq'
+CLIENT_SECRET = 'agokd3j1q6rneen7kxrjgifm5rmbhf'
 
 cid = CLIENT_ID.strip()
 csecret = CLIENT_SECRET.strip()
