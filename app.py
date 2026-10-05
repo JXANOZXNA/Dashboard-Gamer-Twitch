@@ -114,7 +114,7 @@ def inicio():
 
             /* BARRA LATERAL IZQUIERDA (SIDEBAR) */
             .sidebar {{
-                width: 260px; background-color: #1f1f23; border-right: 2px solid #2a2a30;
+                width: 280px; background-color: #1f1f23; border-right: 2px solid #2a2a30;
                 padding: 20px; display: flex; flex-direction: column; flex-shrink: 0;
             }}
             .sidebar h3 {{ color: #9147ff; font-size: 14px; text-transform: uppercase; margin-top: 0; letter-spacing: 1px; }}
@@ -125,10 +125,11 @@ def inicio():
                 transition: background-color 0.2s;
             }}
             .followed-item:hover {{ background-color: #26262c; }}
-            .followed-avatar {{ width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }}
+            .followed-avatar {{ width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }}
             .followed-info {{ flex-grow: 1; overflow: hidden; }}
             .followed-name {{ font-weight: bold; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; display: block; }}
-            .followed-game {{ font-size: 11px; color: #adadb8; white-space: nowrap; text-overflow: ellipsis; display: block; }}
+            .followed-game {{ font-size: 11px; color: #00f593; white-space: nowrap; text-overflow: ellipsis; display: block; font-weight: bold; }}
+            .followed-title {{ font-size: 10px; color: #adadb8; white-space: nowrap; text-overflow: ellipsis; display: block; overflow: hidden; }}
             .status-dot {{ width: 8px; height: 8px; border-radius: 50%; background-color: #eb0400; flex-shrink: 0; }}
             .status-dot.online {{ background-color: #00f593; box-shadow: 0 0 6px #00f593; }}
 
@@ -239,12 +240,15 @@ def inicio():
                     datos.seguidos.forEach(c => {{
                         const statusClass = c.en_vivo ? 'online' : '';
                         const gameText = c.en_vivo ? c.juego : 'Desconectado';
+                        const titleText = c.en_vivo && c.titulo ? `<span class="followed-title" title="${{c.titulo}}">${{c.titulo}}</span>` : '';
+                        
                         html += `
                             <a class="followed-item" href="https://twitch.tv/${{c.usuario.toLowerCase()}}" target="_blank">
                                 <img class="followed-avatar" src="${{c.avatar}}" alt="${{c.usuario}}">
                                 <div class="followed-info">
                                     <span class="followed-name">${{c.usuario}}</span>
                                     <span class="followed-game">${{gameText}}</span>
+                                    ${{titleText}}
                                 </div>
                                 <span class="status-dot ${{statusClass}}"></span>
                             </a>
@@ -270,13 +274,14 @@ def inicio():
                         contenedor.className = "result-card online";
                         contenedor.innerHTML = `
                             <h3 style="color: #00f593; margin-top:0;">🟢 EN VIVO</h3>
+                            <p><strong>Título:</strong> ${{datos.titulo}}</p>
                             <p><strong>Juego:</strong> ${{datos.juego}}</p>
                             <p><strong>Espectadores:</strong> ${{datos.espectadores.toLocaleString()}}</p>
-                            <a class="btn-mini-twitch" href="https://twitch.tv/${{nombre.toLowerCase()}}" target="_blank">Ver Directo</a>
+                            <a class="btn-mini-twitch" href="https://twitch.tv/${{nombre.toLowerCase()}}" target="_blank">Ver Directo en Twitch</a>
                         `;
                     }} else {{
                         contenedor.className = "result-card offline";
-                        contenedor.innerHTML = `<h3 style="color: #eb0400; margin-top:0;">🔴 DESCONECTADO</h3>`;
+                        contenedor.innerHTML = `<h3 style="color: #eb0400; margin-top:0;">🔴 DESCONECTADO</h3><p>El canal no está transmitiendo en este momento.</p>`;
                     }}
                 }} catch (e) {{}}
             }}
@@ -361,18 +366,20 @@ def api_mis_seguidos():
     if not followed_data:
         return {"status": "ok", "seguidos": []}
     
-    # Extraer IDs de streamers seguidos
     broadcaster_ids = [f["broadcaster_id"] for f in followed_data]
     
-    # Consultar si están en vivo
+    # Consultar si están en vivo (y traer juego + título)
     params = [("user_id", bid) for bid in broadcaster_ids]
     r_streams = httpx.get("https://api.twitch.tv/helix/streams", headers=headers, params=params)
     live_dict = {}
     if r_streams.status_code == 200:
         for stream in r_streams.json().get("data", []):
-            live_dict[stream["user_id"]] = stream.get("game_name", "En vivo")
+            live_dict[stream["user_id"]] = {
+                "juego": stream.get("game_name", "En vivo"),
+                "titulo": stream.get("title", "")
+            }
 
-    # Consultar fotos de perfil de los streamers
+    # Consultar fotos de perfil
     r_users = httpx.get("https://api.twitch.tv/helix/users", headers=headers, params=params)
     avatar_dict = {}
     if r_users.status_code == 200:
@@ -383,11 +390,13 @@ def api_mis_seguidos():
     for f in followed_data:
         bid = f["broadcaster_id"]
         is_live = bid in live_dict
+        stream_info = live_dict.get(bid, {})
         resultado.append({
             "usuario": f["broadcaster_name"],
             "avatar": avatar_dict.get(bid, ""),
             "en_vivo": is_live,
-            "juego": live_dict.get(bid, "")
+            "juego": stream_info.get("juego", ""),
+            "titulo": stream_info.get("titulo", "")
         })
 
     # Ordenar: primero los que están en vivo
@@ -405,7 +414,12 @@ def api_buscar(nombre_streamer: str):
         datos = r.json().get("data", [])
         if not datos: return {"en_vivo": False}
         s = datos[0]
-        return {"en_vivo": True, "juego": s.get("game_name"), "espectadores": s.get("viewer_count")}
+        return {
+            "en_vivo": True,
+            "titulo": s.get("title", "Sin título"),
+            "juego": s.get("game_name", "Sin información"),
+            "espectadores": s.get("viewer_count", 0)
+        }
     return {"status": "error"}
 
 @app.get("/api/top-juegos")
