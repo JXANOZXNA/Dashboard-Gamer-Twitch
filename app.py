@@ -4,7 +4,7 @@ import httpx
 
 app = FastAPI(title="Dashboard Gamer - Twitch Helix")
 
-# Credenciales activas de Twitch Developer
+# Credenciales activas
 CLIENT_ID = '5ur4pbx6nnf2zu8sst4k71xrq4bnyj'
 CLIENT_SECRET = 'agokd3j1q6rneen7kxrjgifm5rmbhf'
 
@@ -27,7 +27,7 @@ def obtener_token():
         pass
     return None
 
-# 1. RUTA PRINCIPAL: DASHBOARD WEB INTERACTIVO
+# 1. RUTA PRINCIPAL: FACHADA VISUAL CON ACORDEÓN DESPLEGABLE
 @app.get("/", response_class=HTMLResponse)
 def inicio():
     html_content = """
@@ -77,7 +77,7 @@ def inicio():
             }
             .btn-twitch:hover { background-color: #772ce8; }
 
-            /* ESTILOS DE LA TARJETA CON CARÁTULAS DE JUEGOS */
+            /* ESTILOS DEL TOP JUEGOS Y MENÚ DESPLEGABLE */
             .games-container {
                 background-color: #1f1f23; padding: 30px; border-radius: 12px;
                 border: 2px solid #2a2a30; width: 520px; text-align: left;
@@ -92,16 +92,38 @@ def inicio():
                 padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
             }
             .btn-refresh:hover { background-color: #323239; color: white; }
+            
+            .game-wrapper { margin-bottom: 12px; }
             .game-item {
                 background-color: #0e0e10; padding: 12px 15px; border-radius: 8px;
-                margin-bottom: 12px; border-left: 4px solid #9147ff;
-                display: flex; align-items: center; gap: 15px;
+                border-left: 4px solid #9147ff; display: flex; align-items: center; gap: 15px;
+                cursor: pointer; transition: background-color 0.2s;
             }
+            .game-item:hover { background-color: #18181c; }
             .game-rank { font-size: 18px; font-weight: bold; color: #9147ff; width: 25px; }
             .game-img { width: 45px; height: 60px; border-radius: 6px; object-fit: cover; }
             .game-info { flex-grow: 1; }
             .game-name { font-size: 16px; font-weight: bold; color: white; display: block; }
             .game-tag { font-size: 12px; color: #adadb8; }
+            .game-arrow { color: #9147ff; font-weight: bold; font-size: 14px; }
+
+            /* CONTENEDOR DESPLEGABLE DE STREAMERS */
+            .streamers-dropdown {
+                display: none; background-color: #141416; margin-top: 5px; padding: 12px 15px;
+                border-radius: 8px; border-left: 4px solid #00f593;
+            }
+            .streamer-row {
+                display: flex; justify-content: space-between; align-items: center;
+                padding: 8px 0; border-bottom: 1px solid #26262c;
+            }
+            .streamer-row:last-child { border-bottom: none; }
+            .streamer-user { font-weight: bold; color: white; }
+            .streamer-viewers { color: #00f593; font-size: 13px; font-weight: bold; }
+            .btn-mini-twitch {
+                background-color: #9147ff; color: white; text-decoration: none;
+                padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;
+            }
+            .btn-mini-twitch:hover { background-color: #772ce8; }
         </style>
     </head>
     <body>
@@ -181,12 +203,17 @@ def inicio():
                     let html = "";
                     datos.juegos.forEach((juego, index) => {
                         html += `
-                            <div class="game-item">
-                                <span class="game-rank">#${index + 1}</span>
-                                <img class="game-img" src="${juego.portada}" alt="${juego.nombre}">
-                                <div class="game-info">
-                                    <span class="game-name">${juego.nombre}</span>
-                                    <span class="game-tag">Tendencia Global</span>
+                            <div class="game-wrapper">
+                                <div class="game-item" onclick="toggleStreamers('${juego.id}')">
+                                    <span class="game-rank">#${index + 1}</span>
+                                    <img class="game-img" src="${juego.portada}" alt="${juego.nombre}">
+                                    <div class="game-info">
+                                        <span class="game-name">${juego.nombre}</span>
+                                        <span class="game-tag">Haz clic para ver más vistos 🔽</span>
+                                    </div>
+                                </div>
+                                <div id="dropdown-${juego.id}" class="streamers-dropdown">
+                                    <p style="color: #adadb8; margin: 5px 0;">⏳ Cargando transmisiones masivas...</p>
                                 </div>
                             </div>
                         `;
@@ -194,6 +221,46 @@ def inicio():
                     contenedorJuegos.innerHTML = html;
                 } catch (e) {
                     contenedorJuegos.innerHTML = "<p style='color: #eb0400;'>❌ Error al obtener el Top de juegos.</p>";
+                }
+            }
+
+            // FUNCIÓN PARA DESPLEGAR Y CARGAR STREAMERS DEL JUEGO SELECCIONADO
+            async function toggleStreamers(gameId) {
+                const dropdown = document.getElementById(`dropdown-${gameId}`);
+                
+                // Si ya está visible, lo ocultamos
+                if (dropdown.style.display === "block") {
+                    dropdown.style.display = "none";
+                    return;
+                }
+
+                // Si está oculto, lo mostramos y consultamos la API
+                dropdown.style.display = "block";
+                
+                try {
+                    const respuesta = await fetch(`/api/top-streamers-juego/${gameId}`);
+                    const datos = await respuesta.json();
+
+                    if (datos.status === "error" || datos.streamers.length === 0) {
+                        dropdown.innerHTML = "<p style='color: #adadb8; margin: 5px 0;'>Sin transmisiones populares en este momento.</p>";
+                        return;
+                    }
+
+                    let html = "<p style='color: #00f593; font-weight: bold; margin-top: 0; margin-bottom: 8px;'>🔥 CANALES MÁS VISTOS:</p>";
+                    datos.streamers.forEach(streamer => {
+                        html += `
+                            <div class="streamer-row">
+                                <div>
+                                    <span class="streamer-user">${streamer.usuario}</span>
+                                    <span class="streamer-viewers"> (${streamer.espectadores.toLocaleString()} 👁️)</span>
+                                </div>
+                                <a class="btn-mini-twitch" href="https://twitch.tv/${streamer.usuario.toLowerCase()}" target="_blank">🔴 Ver</a>
+                            </div>
+                        `;
+                    });
+                    dropdown.innerHTML = html;
+                } catch (e) {
+                    dropdown.innerHTML = "<p style='color: #eb0400; margin: 5px 0;'>Error al cargar transmisiones.</p>";
                 }
             }
 
@@ -234,7 +301,7 @@ def api_buscar(nombre_streamer: str):
     except Exception as e:
         return {"status": "error", "mensaje": str(e)}
 
-# 3. RUTA BACKEND: TOP 5 JUEGOS CON IMÁGENES REORGANIZADAS
+# 3. RUTA BACKEND: TOP 5 JUEGOS
 @app.get("/api/top-juegos")
 def api_top_juegos():
     try:
@@ -251,7 +318,6 @@ def api_top_juegos():
             lista_juegos = respuesta.json().get("data", [])
             resultado = []
             for juego in lista_juegos:
-                # Reemplazamos los comodines {width}x{height} por dimensiones de poster (90x120)
                 portada_url = juego.get("box_art_url", "").replace("{width}", "90").replace("{height}", "120")
                 resultado.append({
                     "id": juego.get("id"),
@@ -259,6 +325,34 @@ def api_top_juegos():
                     "portada": portada_url
                 })
             return {"status": "ok", "juegos": resultado}
+            
+        return {"status": "error", "mensaje": f"Twitch HTTP {respuesta.status_code}"}
+    except Exception as e:
+        return {"status": "error", "mensaje": str(e)}
+
+# 4. NUEVO BACKEND: TOP 3 STREAMERS POR ID DE JUEGO
+@app.get("/api/top-streamers-juego/{game_id}")
+def api_top_streamers_juego(game_id: str):
+    try:
+        token = obtener_token()
+        if not token:
+            return {"status": "error", "mensaje": "No se pudo obtener el token"}
+        
+        # Consultamos los 3 streams con más espectadores para este juego
+        url_streams_juego = f"https://api.twitch.tv/helix/streams?game_id={game_id}&first=3"
+        cabeceras = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
+        
+        respuesta = httpx.get(url_streams_juego, headers=cabeceras, follow_redirects=True)
+        
+        if respuesta.status_code == 200:
+            lista_streams = respuesta.json().get("data", [])
+            resultado = []
+            for stream in lista_streams:
+                resultado.append({
+                    "usuario": stream.get("user_name"),
+                    "espectadores": stream.get("viewer_count", 0)
+                })
+            return {"status": "ok", "streamers": resultado}
             
         return {"status": "error", "mensaje": f"Twitch HTTP {respuesta.status_code}"}
     except Exception as e:
