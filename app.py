@@ -12,14 +12,12 @@ REDIRECT_URI = 'http://localhost:5000/callback'
 cid = CLIENT_ID.strip()
 csecret = CLIENT_SECRET.strip()
 
-# Memoria temporal de sesión de usuario
 user_session = {
     "access_token": None,
     "user_info": None
 }
 
 def obtener_app_token():
-    """Token de servidor para funciones públicas."""
     url_auth = "https://id.twitch.tv/oauth2/token"
     datos = {
         "client_id": cid,
@@ -34,18 +32,14 @@ def obtener_app_token():
         pass
     return None
 
-# --- RUTAS DE AUTENTICACIÓN OAUTH 2.0 ---
-
 @app.get("/login")
 def login():
-    """Redirige al usuario a Twitch para iniciar sesión."""
     scope = "user:read:follows"
     auth_url = f"https://id.twitch.tv/oauth2/authorize?client_id={cid}&redirect_uri={REDIRECT_URI}&response_type=code&scope={scope}"
     return RedirectResponse(auth_url)
 
 @app.get("/callback")
 def callback(code: str = None):
-    """Twitch nos regresa aquí con un código de autorización."""
     if not code:
         return RedirectResponse("/")
     
@@ -72,12 +66,9 @@ def callback(code: str = None):
 
 @app.get("/logout")
 def logout():
-    """Cierra la sesión del usuario."""
     user_session["access_token"] = None
     user_session["user_info"] = None
     return RedirectResponse("/")
-
-# --- VISTA PRINCIPAL ---
 
 @app.get("/", response_class=HTMLResponse)
 def inicio():
@@ -110,22 +101,25 @@ def inicio():
                 display: flex; min-height: 100vh; margin: 0; box-sizing: border-box;
             }}
 
-            /* LOGO CABECERA DE SIDEBAR */
-            .brand-logo {{
-                display: flex; align-items: center; gap: 8px; text-decoration: none;
-                color: #9147ff; font-weight: bold; font-size: 18px; margin-bottom: 20px;
-                padding: 6px 10px; border-radius: 8px; background-color: #141416;
-                border: 1px solid #2a2a30; transition: background-color 0.2s, transform 0.1s;
-                cursor: pointer;
-            }}
-            .brand-logo:hover {{ background-color: #26262c; color: #00f593; }}
-            .brand-logo:active {{ transform: scale(0.98); }}
-
-            /* BARRA LATERAL IZQUIERDA (SIDEBAR) */
             .sidebar {{
                 width: 280px; background-color: #1f1f23; border-right: 2px solid #2a2a30;
                 padding: 20px; display: flex; flex-direction: column; flex-shrink: 0;
+                transition: transform 0.3s ease, width 0.3s ease, padding 0.3s ease;
+                overflow: hidden;
             }}
+
+            .sidebar.collapsed {{
+                width: 0; padding: 0; border-right: none; transform: translateX(-100%);
+            }}
+
+            .brand-logo {{
+                display: flex; align-items: center; justify-content: space-between;
+                text-decoration: none; color: #9147ff; font-weight: bold; font-size: 18px;
+                margin-bottom: 20px; padding: 8px 12px; border-radius: 8px;
+                background-color: #141416; border: 1px solid #2a2a30;
+            }}
+            .brand-logo:hover {{ background-color: #26262c; color: #00f593; }}
+
             .sidebar h3 {{ color: #9147ff; font-size: 13px; text-transform: uppercase; margin-top: 0; letter-spacing: 1px; }}
             .followed-list {{ list-style: none; padding: 0; margin: 0; }}
             .followed-item {{
@@ -142,11 +136,19 @@ def inicio():
             .status-dot {{ width: 8px; height: 8px; border-radius: 50%; background-color: #eb0400; flex-shrink: 0; }}
             .status-dot.online {{ background-color: #00f593; box-shadow: 0 0 6px #00f593; }}
 
-            /* CONTENIDO PRINCIPAL */
             .main-content {{
                 flex-grow: 1; padding: 30px; display: flex; flex-direction: column; align-items: center; width: 100%;
             }}
-            .top-bar {{ width: 100%; max-width: 520px; display: flex; justify-content: flex-end; margin-bottom: 20px; }}
+            .top-bar {{
+                width: 100%; max-width: 520px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+            }}
+            .btn-toggle-sidebar {{
+                background-color: #1f1f23; color: #9147ff; border: 1px solid #9147ff;
+                padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer;
+                transition: background-color 0.2s;
+            }}
+            .btn-toggle-sidebar:hover {{ background-color: #9147ff; color: white; }}
+
             .user-profile {{ display: flex; align-items: center; gap: 10px; background: #1f1f23; padding: 6px 14px; border-radius: 20px; border: 1px solid #9147ff; }}
             .avatar-header {{ width: 28px; height: 28px; border-radius: 50%; }}
             .username-header {{ font-weight: bold; color: white; font-size: 14px; }}
@@ -176,7 +178,6 @@ def inicio():
             .online {{ border-left-color: #00f593; }}
             .offline {{ border-left-color: #eb0400; }}
 
-            /* TOP JUEGOS Y DESPLEGABLES */
             .games-container {{
                 background-color: #1f1f23; padding: 25px; border-radius: 12px;
                 border: 2px solid #2a2a30; width: 100%; max-width: 520px; text-align: left; box-sizing: border-box;
@@ -200,26 +201,13 @@ def inicio():
             .streamer-row {{ display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #26262c; }}
             .streamer-row:last-child {{ border-bottom: none; }}
             .btn-mini-twitch {{ background-color: #9147ff; color: white; text-decoration: none; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }}
-
-            /* 📱 ADAPTABILIDAD PARA DISPOSITIVOS MÓVILES (RESPONSIVE) */
-            @media (max-width: 768px) {{
-                body {{ flex-direction: column; }}
-                .sidebar {{
-                    width: 100%; border-right: none; border-bottom: 2px solid #2a2a30;
-                    box-sizing: border-box; padding: 15px;
-                }}
-                .main-content {{ padding: 15px; }}
-                .container, .games-container, .top-bar {{ max-width: 100%; }}
-                .search-box {{ flex-direction: column; }}
-                input[type="text"] {{ width: 100%; box-sizing: border-box; }}
-                button {{ width: 100%; }}
-            }}
         </style>
     </head>
     <body>
-        <div class="sidebar">
-            <a href="/" class="brand-logo" title="Clic para refrescar la app">
-                🎮 GAMER HUB <span style="font-size: 11px; color: #adadb8;">🔄</span>
+        <div id="sidebar" class="sidebar">
+            <a href="/" class="brand-logo" title="Refrescar Dashboard">
+                <span>🎮 GAMER HUB</span>
+                <span style="font-size: 12px; color: #adadb8;">🔄</span>
             </a>
             <h3>🔴 CANALES SEGUIDOS</h3>
             <div id="listaSeguidos">
@@ -229,6 +217,7 @@ def inicio():
 
         <div class="main-content">
             <div class="top-bar">
+                <button class="btn-toggle-sidebar" onclick="toggleSidebar()">☰ Menú Seguidos</button>
                 {user_header}
             </div>
 
@@ -250,6 +239,11 @@ def inicio():
         </div>
 
         <script>
+            function toggleSidebar() {{
+                const sidebar = document.getElementById('sidebar');
+                sidebar.classList.toggle('collapsed');
+            }}
+
             async function cargarCanalesSeguidos() {{
                 const contenedor = document.getElementById('listaSeguidos');
                 try {{
@@ -351,7 +345,7 @@ def inicio():
                             <div class="streamer-row">
                                 <div>
                                     <span style="color:white; font-weight:bold;">${{s.usuario}}</span>
-                                    <span style="color:#00f593; font-size:12px;"> (${{s.espectadores.toLocaleString()}} 👁️)</span>
+                                    <span style="color:#00f593; font-size:12px;"> (${{s.espectadores.toLocaleString()}} 👁️️)</span>
                                 </div>
                                 <a class="btn-mini-twitch" href="https://twitch.tv/${{s.usuario.toLowerCase()}}" target="_blank">Ver</a>
                             </div>
@@ -370,8 +364,6 @@ def inicio():
     </html>
     """
     return html_content
-
-# --- ENDPOINTS API ---
 
 @app.get("/api/mis-seguidos")
 def api_mis_seguidos():
@@ -468,5 +460,4 @@ def api_top_streamers_juego(game_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    # Cambiado a 0.0.0.0 para escuchar en toda la red local (Móviles / PC)
-    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
+    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)
