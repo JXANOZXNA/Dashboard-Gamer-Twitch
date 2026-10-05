@@ -101,29 +101,50 @@ def inicio():
                 display: flex; min-height: 100vh; margin: 0; box-sizing: border-box;
             }}
 
+            /* BARRA LATERAL ESTILO TWITCH */
             .sidebar {{
                 width: 280px; background-color: #1f1f23; border-right: 2px solid #2a2a30;
-                padding: 20px; display: flex; flex-direction: column; flex-shrink: 0;
-                transition: transform 0.3s ease, width 0.3s ease, padding 0.3s ease;
-                overflow: hidden;
+                padding: 15px; display: flex; flex-direction: column; flex-shrink: 0;
+                transition: width 0.3s ease, padding 0.3s ease;
+                position: relative; box-sizing: border-box;
             }}
 
             .sidebar.collapsed {{
-                width: 0; padding: 0; border-right: none; transform: translateX(-100%);
+                width: 70px; padding: 15px 8px;
             }}
 
-            .brand-logo {{
+            .sidebar-header {{
                 display: flex; align-items: center; justify-content: space-between;
-                text-decoration: none; color: #9147ff; font-weight: bold; font-size: 18px;
-                margin-bottom: 20px; padding: 8px 12px; border-radius: 8px;
-                background-color: #141416; border: 1px solid #2a2a30;
+                margin-bottom: 20px;
             }}
-            .brand-logo:hover {{ background-color: #26262c; color: #00f593; }}
 
-            .sidebar h3 {{ color: #9147ff; font-size: 13px; text-transform: uppercase; margin-top: 0; letter-spacing: 1px; }}
+            .brand-title {{
+                color: #9147ff; font-weight: bold; font-size: 16px; display: flex; align-items: center; gap: 6px;
+                text-decoration: none;
+            }}
+
+            .sidebar.collapsed .brand-title span,
+            .sidebar.collapsed .sidebar-section-title,
+            .sidebar.collapsed .followed-info {{
+                display: none;
+            }}
+
+            .btn-toggle-twitch {{
+                background-color: #26262c; color: #efeff1; border: 1px solid #464649;
+                border-radius: 6px; width: 28px; height: 28px; cursor: pointer;
+                display: flex; align-items: center; justify-content: center;
+                font-weight: bold; font-size: 14px; transition: background-color 0.2s;
+            }}
+            .btn-toggle-twitch:hover {{ background-color: #9147ff; color: white; }}
+
+            .sidebar-section-title {{
+                color: #adadb8; font-size: 12px; font-weight: bold; text-transform: uppercase;
+                margin-bottom: 10px; letter-spacing: 0.5px;
+            }}
+
             .followed-list {{ list-style: none; padding: 0; margin: 0; }}
             .followed-item {{
-                display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+                display: flex; align-items: center; gap: 10px; padding: 8px;
                 border-radius: 6px; text-decoration: none; color: #efeff1; margin-bottom: 5px;
                 transition: background-color 0.2s;
             }}
@@ -136,30 +157,38 @@ def inicio():
             .status-dot {{ width: 8px; height: 8px; border-radius: 50%; background-color: #eb0400; flex-shrink: 0; }}
             .status-dot.online {{ background-color: #00f593; box-shadow: 0 0 6px #00f593; }}
 
+            /* CONTENIDO PRINCIPAL */
             .main-content {{
-                flex-grow: 1; padding: 30px; display: flex; flex-direction: column; align-items: center; width: 100%;
+                flex-grow: 1; padding: 25px 30px; display: flex; flex-direction: column; align-items: center; width: 100%;
             }}
-            .top-bar {{
-                width: 100%; max-width: 520px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
-            }}
-            .btn-toggle-sidebar {{
-                background-color: #1f1f23; color: #9147ff; border: 1px solid #9147ff;
-                padding: 8px 14px; border-radius: 6px; font-weight: bold; cursor: pointer;
-                transition: background-color 0.2s;
-            }}
-            .btn-toggle-sidebar:hover {{ background-color: #9147ff; color: white; }}
 
-            .user-profile {{ display: flex; align-items: center; gap: 10px; background: #1f1f23; padding: 6px 14px; border-radius: 20px; border: 1px solid #9147ff; }}
+            /* BARRA SUPERIOR CON SPOTIFY INTEGRADO */
+            .top-bar {{
+                width: 100%; max-width: 850px; display: flex; justify-content: space-between;
+                align-items: center; margin-bottom: 25px; gap: 20px; flex-wrap: wrap;
+            }}
+
+            .top-left-group {{
+                display: flex; flex-direction: column; gap: 10px; flex-grow: 1; max-width: 500px;
+            }}
+
+            .user-profile {{ display: flex; align-items: center; gap: 10px; background: #1f1f23; padding: 6px 14px; border-radius: 20px; border: 1px solid #9147ff; width: fit-content; }}
             .avatar-header {{ width: 28px; height: 28px; border-radius: 50%; }}
             .username-header {{ font-weight: bold; color: white; font-size: 14px; }}
-            .btn-login {{ background-color: #9147ff; color: white; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; }}
+            .btn-login {{ background-color: #9147ff; color: white; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; width: fit-content; }}
             .btn-login:hover {{ background-color: #772ce8; }}
             .btn-logout {{ color: #eb0400; text-decoration: none; font-size: 12px; font-weight: bold; margin-left: 8px; }}
+
+            /* REPRODUCTOR SPOTIFY COMPACTO */
+            .spotify-widget {{
+                width: 320px; height: 80px; border-radius: 12px; overflow: hidden;
+                border: 1px solid #2a2a30; box-shadow: 0 4px 12px rgba(0,0,0,0.4); flex-shrink: 0;
+            }}
 
             .container {{
                 text-align: center; background-color: #1f1f23; padding: 30px;
                 border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-                border: 2px solid #9147ff; width: 100%; max-width: 520px; margin-bottom: 30px; box-sizing: border-box;
+                border: 2px solid #9147ff; width: 100%; max-width: 850px; margin-bottom: 30px; box-sizing: border-box;
             }}
             h1 {{ color: #9147ff; margin-top: 0; font-size: 24px; }}
             .search-box {{ display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }}
@@ -180,7 +209,7 @@ def inicio():
 
             .games-container {{
                 background-color: #1f1f23; padding: 25px; border-radius: 12px;
-                border: 2px solid #2a2a30; width: 100%; max-width: 520px; text-align: left; box-sizing: border-box;
+                border: 2px solid #2a2a30; width: 100%; max-width: 850px; text-align: left; box-sizing: border-box;
             }}
             .games-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }}
             .games-container h2 {{ color: #00f593; margin: 0; font-size: 18px; }}
@@ -205,26 +234,38 @@ def inicio():
     </head>
     <body>
         <div id="sidebar" class="sidebar">
-            <a href="/" class="brand-logo" title="Refrescar Dashboard">
-                <span>🎮 GAMER HUB</span>
-                <span style="font-size: 12px; color: #adadb8;">🔄</span>
-            </a>
-            <h3>🔴 CANALES SEGUIDOS</h3>
+            <div class="sidebar-header">
+                <a href="/" class="brand-title" title="Refrescar Dashboard">
+                    🎮 <span>GAMER HUB</span>
+                </a>
+                <button id="toggleBtn" class="btn-toggle-twitch" onclick="toggleSidebar()" title="Contraer/Expandir">«</button>
+            </div>
+            
+            <div class="sidebar-section-title">🔴 Canales Seguidos</div>
             <div id="listaSeguidos">
-                <p style="color: #adadb8; font-size: 12px;">Inicia sesión con Twitch para ver los canales que sigues en tiempo real.</p>
+                <p style="color: #adadb8; font-size: 12px;">Inicia sesión con Twitch para ver canales en vivo.</p>
             </div>
         </div>
 
         <div class="main-content">
             <div class="top-bar">
-                <button class="btn-toggle-sidebar" onclick="toggleSidebar()">☰ Menú Seguidos</button>
-                {user_header}
+                <div class="top-left-group">
+                    {user_header}
+                </div>
+
+                <!-- WIDGET REPRODUCTOR DE SPOTIFY (PLAYLIST VARIADA GAMING/HIP-HOP/SYNTH) -->
+                <div class="spotify-widget">
+                    <iframe src="https://open.spotify.com/embed/playlist/37i9dQZF1DXdLENR312111?utm_source=generator&theme=0" 
+                            width="100%" height="80" frameBorder="0" allowfullscreen="" 
+                            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" 
+                            loading="lazy"></iframe>
+                </div>
             </div>
 
             <div class="container">
                 <h1>🎮 DASHBOARD GAMER</h1>
                 <div class="search-box">
-                    <input type="text" id="streamerNombre" placeholder="Buscar canal...">
+                    <input type="text" id="streamerNombre" placeholder="Buscar canal en Twitch...">
                     <button onclick="buscarStreamerWeb()">Buscar</button>
                 </div>
                 <div id="resultado" class="result-card"></div>
@@ -241,7 +282,13 @@ def inicio():
         <script>
             function toggleSidebar() {{
                 const sidebar = document.getElementById('sidebar');
+                const btn = document.getElementById('toggleBtn');
                 sidebar.classList.toggle('collapsed');
+                if (sidebar.classList.contains('collapsed')) {{
+                    btn.innerHTML = '»';
+                }} else {{
+                    btn.innerHTML = '«';
+                }}
             }}
 
             async function cargarCanalesSeguidos() {{
@@ -263,7 +310,7 @@ def inicio():
                         const titleText = c.en_vivo && c.titulo ? `<span class="followed-title" title="${{c.titulo}}">${{c.titulo}}</span>` : '';
                         
                         html += `
-                            <a class="followed-item" href="https://twitch.tv/${{c.usuario.toLowerCase()}}" target="_blank">
+                            <a class="followed-item" href="https://twitch.tv/${{c.usuario.toLowerCase()}}" target="_blank" title="${{c.usuario}} - ${{gameText}}">
                                 <img class="followed-avatar" src="${{c.avatar}}" alt="${{c.usuario}}">
                                 <div class="followed-info">
                                     <span class="followed-name">${{c.usuario}}</span>
