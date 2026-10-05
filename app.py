@@ -1,5 +1,5 @@
-from fastapi import FastAPI
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, RedirectResponse
 import httpx
 
 app = FastAPI(title="Dashboard Gamer - Twitch Helix")
@@ -7,30 +7,98 @@ app = FastAPI(title="Dashboard Gamer - Twitch Helix")
 # Credenciales activas
 CLIENT_ID = '5ur4pbx6nnf2zu8sst4k71xrq4bnyj'
 CLIENT_SECRET = 'agokd3j1q6rneen7kxrjgifm5rmbhf'
+REDIRECT_URI = 'http://localhost:5000/callback'
 
 cid = CLIENT_ID.strip()
 csecret = CLIENT_SECRET.strip()
 
-def obtener_token():
-    """Autenticación con la API de Twitch OAUTH."""
+# Memoria temporal de sesión de usuario
+user_session = {
+    "access_token": None,
+    "user_info": None
+}
+
+def obtener_app_token():
+    """Token de servidor para funciones públicas."""
     url_auth = "https://id.twitch.tv/oauth2/token"
-    datos_formulario = {
+    datos = {
         "client_id": cid,
         "client_secret": csecret,
         "grant_type": "client_credentials",
     }
     try:
-        respuesta = httpx.post(url_auth, data=datos_formulario, follow_redirects=True)
-        if respuesta.status_code == 200:
-            return respuesta.json().get("access_token")
+        r = httpx.post(url_auth, data=datos, follow_redirects=True)
+        if r.status_code == 200:
+            return r.json().get("access_token")
     except Exception:
         pass
     return None
 
-# 1. RUTA PRINCIPAL: FACHADA VISUAL CON ACORDEÓN DESPLEGABLE
+# --- RUTAS DE AUTENTICACIÓN OAUTH 2.0 ---
+
+@app.get("/login")
+def login():
+    """Redirige al usuario a Twitch para iniciar sesión."""
+    scope = "user:read:follows"
+    auth_url = f"https://id.twitch.tv/oauth2/authorize?client_id={cid}&redirect_uri={REDIRECT_URI}&response_type=code&scope={scope}"
+    return RedirectResponse(auth_url)
+
+@app.get("/callback")
+def callback(code: str = None):
+    """Twitch nos regresa aquí con un código de autorización."""
+    if not code:
+        return RedirectResponse("/")
+    
+    url_token = "https://id.twitch.tv/oauth2/token"
+    datos = {
+        "client_id": cid,
+        "client_secret": csecret,
+        "code": code,
+        "grant_type": "authorization_code",
+        "redirect_uri": REDIRECT_URI
+    }
+    
+    r = httpx.post(url_token, data=datos)
+    if r.status_code == 200:
+        token_usuario = r.json().get("access_token")
+        user_session["access_token"] = token_usuario
+        
+        # Obtener información del perfil del usuario
+        headers = {"Client-Id": cid, "Authorization": f"Bearer {token_usuario}"}
+        r_user = httpx.get("https://api.twitch.tv/helix/users", headers=headers)
+        if r_user.status_code == 200:
+            user_session["user_info"] = r_user.json().get("data", [])[0]
+            
+    return RedirectResponse("/")
+
+@app.get("/logout")
+def logout():
+    """Cierra la sesión del usuario."""
+    user_session["access_token"] = None
+    user_session["user_info"] = None
+    return RedirectResponse("/")
+
+# --- VISTA PRINCIPAL ---
+
 @app.get("/", response_class=HTMLResponse)
 def inicio():
-    html_content = """
+    usuario = user_session.get("user_info")
+    
+    # Bloque de usuario / Login
+    if usuario:
+        user_header = f"""
+            <div class="user-profile">
+                <img src="{usuario['profile_image_url']}" class="avatar-header" alt="Avatar">
+                <span class="username-header">{usuario['display_name']}</span>
+                <a href="/logout" class="btn-logout">Cerrar Sesión</a>
+            </div>
+        """
+    else:
+        user_header = """
+            <a href="/login" class="btn-login">🎮 Iniciar Sesión con Twitch</a>
+        """
+
+    html_content = f"""
     <!DOCTYPE html>
     <html lang="es">
     <head>
@@ -38,325 +106,329 @@ def inicio():
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>Dashboard Gamer - Twitch</title>
         <style>
-            body {
+            body {{
                 background-color: #0e0e10; color: #efeff1;
                 font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                display: flex; flex-direction: column; align-items: center;
-                padding: 40px 20px; min-height: 100vh; margin: 0; box-sizing: border-box;
-            }
-            .container {
-                text-align: center; background-color: #1f1f23; padding: 40px;
-                border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-                border: 2px solid #9147ff; width: 520px; margin-bottom: 30px;
-            }
-            h1 { color: #9147ff; margin-top: 0; margin-bottom: 10px; }
-            p { color: #adadb8; margin-bottom: 30px; }
-            .search-box { display: flex; gap: 10px; justify-content: center; margin-bottom: 20px; }
-            input[type="text"] {
-                background-color: #464649; border: 2px solid transparent; color: white;
-                padding: 12px 20px; border-radius: 6px; font-size: 16px; outline: none; width: 60%;
-                transition: border 0.3s;
-            }
-            input[type="text"]:focus { border: 2px solid #9147ff; }
-            button {
-                background-color: #9147ff; color: white; border: none; padding: 12px 24px;
-                border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer;
+                display: flex; min-height: 100vh; margin: 0; box-sizing: border-box;
+            }}
+
+            /* BARRA LATERAL IZQUIERDA (SIDEBAR) */
+            .sidebar {{
+                width: 260px; background-color: #1f1f23; border-right: 2px solid #2a2a30;
+                padding: 20px; display: flex; flex-direction: column; flex-shrink: 0;
+            }}
+            .sidebar h3 {{ color: #9147ff; font-size: 14px; text-transform: uppercase; margin-top: 0; letter-spacing: 1px; }}
+            .followed-list {{ list-style: none; padding: 0; margin: 0; }}
+            .followed-item {{
+                display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+                border-radius: 6px; text-decoration: none; color: #efeff1; margin-bottom: 5px;
                 transition: background-color 0.2s;
-            }
-            button:hover { background-color: #772ce8; }
-            .result-card {
-                margin-top: 20px; padding: 20px; border-radius: 8px; text-align: left;
+            }}
+            .followed-item:hover {{ background-color: #26262c; }}
+            .followed-avatar {{ width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }}
+            .followed-info {{ flex-grow: 1; overflow: hidden; }}
+            .followed-name {{ font-weight: bold; font-size: 13px; white-space: nowrap; text-overflow: ellipsis; display: block; }}
+            .followed-game {{ font-size: 11px; color: #adadb8; white-space: nowrap; text-overflow: ellipsis; display: block; }}
+            .status-dot {{ width: 8px; height: 8px; border-radius: 50%; background-color: #eb0400; flex-shrink: 0; }}
+            .status-dot.online {{ background-color: #00f593; box-shadow: 0 0 6px #00f593; }}
+
+            /* CONTENIDO PRINCIPAL */
+            .main-content {{
+                flex-grow: 1; padding: 30px; display: flex; flex-direction: column; align-items: center;
+            }}
+            .top-bar {{ width: 100%; max-width: 520px; display: flex; justify-content: flex-end; margin-bottom: 20px; }}
+            .user-profile {{ display: flex; align-items: center; gap: 10px; background: #1f1f23; padding: 6px 14px; border-radius: 20px; border: 1px solid #9147ff; }}
+            .avatar-header {{ width: 28px; height: 28px; border-radius: 50%; }}
+            .username-header {{ font-weight: bold; color: white; font-size: 14px; }}
+            .btn-login {{ background-color: #9147ff; color: white; text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold; }}
+            .btn-login:hover {{ background-color: #772ce8; }}
+            .btn-logout {{ color: #eb0400; text-decoration: none; font-size: 12px; font-weight: bold; margin-left: 8px; }}
+
+            .container {{
+                text-align: center; background-color: #1f1f23; padding: 30px;
+                border-radius: 12px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+                border: 2px solid #9147ff; width: 100%; max-width: 520px; margin-bottom: 30px; box-sizing: border-box;
+            }}
+            h1 {{ color: #9147ff; margin-top: 0; font-size: 24px; }}
+            .search-box {{ display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }}
+            input[type="text"] {{
+                background-color: #464649; border: 2px solid transparent; color: white;
+                padding: 10px 15px; border-radius: 6px; font-size: 14px; outline: none; width: 60%;
+            }}
+            button {{
+                background-color: #9147ff; color: white; border: none; padding: 10px 18px;
+                border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer;
+            }}
+            .result-card {{
+                margin-top: 15px; padding: 15px; border-radius: 8px; text-align: left;
                 display: none; background-color: #0e0e10; border-left: 5px solid #9147ff;
-            }
-            .online { border-left-color: #00f593; }
-            .offline { border-left-color: #eb0400; }
-            .btn-twitch {
-                display: inline-block; margin-top: 15px; background-color: #9147ff; color: white;
-                text-decoration: none; padding: 10px 18px; border-radius: 6px; font-weight: bold;
-                font-size: 14px; transition: background-color 0.2s;
-            }
-            .btn-twitch:hover { background-color: #772ce8; }
+            }}
+            .online {{ border-left-color: #00f593; }}
+            .offline {{ border-left-color: #eb0400; }}
 
-            /* ESTILOS DEL TOP JUEGOS Y MENÚ DESPLEGABLE */
-            .games-container {
-                background-color: #1f1f23; padding: 30px; border-radius: 12px;
-                border: 2px solid #2a2a30; width: 520px; text-align: left;
-                box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); box-sizing: border-box;
-            }
-            .games-header {
-                display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
-            }
-            .games-container h2 { color: #00f593; margin: 0; font-size: 20px; }
-            .btn-refresh {
-                background-color: #26262c; color: #adadb8; border: 1px solid #464649;
-                padding: 6px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
-            }
-            .btn-refresh:hover { background-color: #323239; color: white; }
-            
-            .game-wrapper { margin-bottom: 12px; }
-            .game-item {
-                background-color: #0e0e10; padding: 12px 15px; border-radius: 8px;
-                border-left: 4px solid #9147ff; display: flex; align-items: center; gap: 15px;
-                cursor: pointer; transition: background-color 0.2s;
-            }
-            .game-item:hover { background-color: #18181c; }
-            .game-rank { font-size: 18px; font-weight: bold; color: #9147ff; width: 25px; }
-            .game-img { width: 45px; height: 60px; border-radius: 6px; object-fit: cover; }
-            .game-info { flex-grow: 1; }
-            .game-name { font-size: 16px; font-weight: bold; color: white; display: block; }
-            .game-tag { font-size: 12px; color: #adadb8; }
-            .game-arrow { color: #9147ff; font-weight: bold; font-size: 14px; }
-
-            /* CONTENEDOR DESPLEGABLE DE STREAMERS */
-            .streamers-dropdown {
-                display: none; background-color: #141416; margin-top: 5px; padding: 12px 15px;
-                border-radius: 8px; border-left: 4px solid #00f593;
-            }
-            .streamer-row {
-                display: flex; justify-content: space-between; align-items: center;
-                padding: 8px 0; border-bottom: 1px solid #26262c;
-            }
-            .streamer-row:last-child { border-bottom: none; }
-            .streamer-user { font-weight: bold; color: white; }
-            .streamer-viewers { color: #00f593; font-size: 13px; font-weight: bold; }
-            .btn-mini-twitch {
-                background-color: #9147ff; color: white; text-decoration: none;
-                padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: bold;
-            }
-            .btn-mini-twitch:hover { background-color: #772ce8; }
+            /* TOP JUEGOS Y DESPLEGABLES */
+            .games-container {{
+                background-color: #1f1f23; padding: 25px; border-radius: 12px;
+                border: 2px solid #2a2a30; width: 100%; max-width: 520px; text-align: left; box-sizing: border-box;
+            }}
+            .games-header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }}
+            .games-container h2 {{ color: #00f593; margin: 0; font-size: 18px; }}
+            .game-wrapper {{ margin-bottom: 10px; }}
+            .game-item {{
+                background-color: #0e0e10; padding: 10px 12px; border-radius: 8px;
+                border-left: 4px solid #9147ff; display: flex; align-items: center; gap: 12px; cursor: pointer;
+            }}
+            .game-rank {{ font-size: 16px; font-weight: bold; color: #9147ff; width: 20px; }}
+            .game-img {{ width: 40px; height: 53px; border-radius: 4px; object-fit: cover; }}
+            .game-info {{ flex-grow: 1; }}
+            .game-name {{ font-size: 15px; font-weight: bold; color: white; display: block; }}
+            .game-tag {{ font-size: 11px; color: #adadb8; }}
+            .streamers-dropdown {{
+                display: none; background-color: #141416; margin-top: 5px; padding: 10px 12px;
+                border-radius: 6px; border-left: 4px solid #00f593;
+            }}
+            .streamer-row {{ display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #26262c; }}
+            .streamer-row:last-child {{ border-bottom: none; }}
+            .btn-mini-twitch {{ background-color: #9147ff; color: white; text-decoration: none; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }}
         </style>
     </head>
     <body>
-        <div class="container">
-            <h1>🎮 DASHBOARD GAMER</h1>
-            <p>Proyecto de Ingeniería de Software — Desarrollado por Juandi</p>
-            
-            <div class="search-box">
-                <input type="text" id="streamerNombre" placeholder="Escribe un streamer...">
-                <button onclick="buscarStreamerWeb()">Buscar Canal</button>
+        <div class="sidebar">
+            <h3>🔴 CANALES SEGUIDOS</h3>
+            <div id="listaSeguidos">
+                <p style="color: #adadb8; font-size: 12px;">Inicia sesión con Twitch para ver los canales que sigues en tiempo real.</p>
             </div>
-
-            <div id="resultado" class="result-card"></div>
         </div>
 
-        <div class="games-container">
-            <div class="games-header">
-                <h2>🏆 TOP 5 JUEGOS EN TWITCH</h2>
-                <button class="btn-refresh" onclick="cargarTopJuegos()">🔄 Refrescar</button>
+        <div class="main-content">
+            <div class="top-bar">
+                {user_header}
             </div>
-            <div id="listaJuegos">⏳ Cargando carátulas y tendencias...</div>
+
+            <div class="container">
+                <h1>🎮 DASHBOARD GAMER</h1>
+                <div class="search-box">
+                    <input type="text" id="streamerNombre" placeholder="Buscar canal...">
+                    <button onclick="buscarStreamerWeb()">Buscar</button>
+                </div>
+                <div id="resultado" class="result-card"></div>
+            </div>
+
+            <div class="games-container">
+                <div class="games-header">
+                    <h2>🏆 TOP 5 JUEGOS EN TWITCH</h2>
+                </div>
+                <div id="listaJuegos">⏳ Cargando tendencias...</div>
+            </div>
         </div>
 
         <script>
-            async function buscarStreamerWeb() {
-                const nombre = document.getElementById('streamerNombre').value;
-                const contenedor = document.getElementById('resultado');
-                if (!nombre) { alert('Por favor, escribe un nombre primero'); return; }
-                
-                contenedor.style.display = "block";
-                contenedor.innerHTML = "<p>⏳ Buscando información en Twitch...</p>";
-                
-                try {
-                    const respuesta = await fetch(`/api/buscar/${nombre}`);
+            async function cargarCanalesSeguidos() {{
+                const contenedor = document.getElementById('listaSeguidos');
+                try {{
+                    const respuesta = await fetch('/api/mis-seguidos');
                     const datos = await respuesta.json();
                     
-                    if (datos.status === "error") {
-                        contenedor.className = "result-card offline";
-                        contenedor.innerHTML = `<p>❌ Error: ${datos.mensaje}</p>`;
+                    if (datos.status === "no_logged") return;
+                    if (datos.status === "error") {{
+                        contenedor.innerHTML = `<p style="color: #eb0400; font-size: 12px;">❌ Error al cargar seguidos</p>`;
                         return;
-                    }
+                    }}
 
-                    if (datos.en_vivo) {
+                    let html = '<div class="followed-list">';
+                    datos.seguidos.forEach(c => {{
+                        const statusClass = c.en_vivo ? 'online' : '';
+                        const gameText = c.en_vivo ? c.juego : 'Desconectado';
+                        html += `
+                            <a class="followed-item" href="https://twitch.tv/${{c.usuario.toLowerCase()}}" target="_blank">
+                                <img class="followed-avatar" src="${{c.avatar}}" alt="${{c.usuario}}">
+                                <div class="followed-info">
+                                    <span class="followed-name">${{c.usuario}}</span>
+                                    <span class="followed-game">${{gameText}}</span>
+                                </div>
+                                <span class="status-dot ${{statusClass}}"></span>
+                            </a>
+                        `;
+                    }});
+                    html += '</div>';
+                    contenedor.innerHTML = html;
+                }} catch (e) {{
+                    contenedor.innerHTML = `<p style="color: #eb0400; font-size: 12px;">❌ Error de conexión</p>`;
+                }}
+            }}
+
+            async function buscarStreamerWeb() {{
+                const nombre = document.getElementById('streamerNombre').value;
+                const contenedor = document.getElementById('resultado');
+                if (!nombre) return;
+                contenedor.style.display = "block";
+                contenedor.innerHTML = "<p>⏳ Buscando...</p>";
+                try {{
+                    const respuesta = await fetch(`/api/buscar/${{nombre}}`);
+                    const datos = await respuesta.json();
+                    if (datos.en_vivo) {{
                         contenedor.className = "result-card online";
                         contenedor.innerHTML = `
                             <h3 style="color: #00f593; margin-top:0;">🟢 EN VIVO</h3>
-                            <p><strong>Título:</strong> ${datos.titulo}</p>
-                            <p><strong>Juego:</strong> ${datos.juego}</p>
-                            <p><strong>Espectadores:</strong> ${datos.espectadores.toLocaleString()}</p>
-                            <a class="btn-twitch" href="https://twitch.tv/${nombre.toLowerCase()}" target="_blank">🔴 Ver Directo en Twitch</a>
+                            <p><strong>Juego:</strong> ${{datos.juego}}</p>
+                            <p><strong>Espectadores:</strong> ${{datos.espectadores.toLocaleString()}}</p>
+                            <a class="btn-mini-twitch" href="https://twitch.tv/${{nombre.toLowerCase()}}" target="_blank">Ver Directo</a>
                         `;
-                    } else {
+                    }} else {{
                         contenedor.className = "result-card offline";
-                        contenedor.innerHTML = `
-                            <h3 style="color: #eb0400; margin-top:0;">🔴 DESCONECTADO</h3>
-                            <p>El canal no está transmitiendo en este momento.</p>
-                        `;
-                    }
-                } catch (e) {
-                    contenedor.className = "result-card offline";
-                    contenedor.innerHTML = "<p>❌ Error de conexión al servidor local.</p>";
-                }
-            }
+                        contenedor.innerHTML = `<h3 style="color: #eb0400; margin-top:0;">🔴 DESCONECTADO</h3>`;
+                    }}
+                }} catch (e) {{}}
+            }}
 
-            async function cargarTopJuegos() {
+            async function cargarTopJuegos() {{
                 const contenedorJuegos = document.getElementById('listaJuegos');
-                contenedorJuegos.innerHTML = "<p style='color: #adadb8;'>⏳ Actualizando lista...</p>";
-                try {
+                try {{
                     const respuesta = await fetch('/api/top-juegos');
                     const datos = await respuesta.json();
-
-                    if (datos.status === "error") {
-                        contenedorJuegos.innerHTML = `<p style="color: #eb0400;">❌ ${datos.mensaje}</p>`;
-                        return;
-                    }
-
                     let html = "";
-                    datos.juegos.forEach((juego, index) => {
+                    datos.juegos.forEach((juego, index) => {{
                         html += `
                             <div class="game-wrapper">
-                                <div class="game-item" onclick="toggleStreamers('${juego.id}')">
-                                    <span class="game-rank">#${index + 1}</span>
-                                    <img class="game-img" src="${juego.portada}" alt="${juego.nombre}">
+                                <div class="game-item" onclick="toggleStreamers('${{juego.id}}')">
+                                    <span class="game-rank">#${{index + 1}}</span>
+                                    <img class="game-img" src="${{juego.portada}}" alt="${{juego.nombre}}">
                                     <div class="game-info">
-                                        <span class="game-name">${juego.nombre}</span>
-                                        <span class="game-tag">Haz clic para ver más vistos 🔽</span>
+                                        <span class="game-name">${{juego.nombre}}</span>
+                                        <span class="game-tag">Ver más vistos 🔽</span>
                                     </div>
                                 </div>
-                                <div id="dropdown-${juego.id}" class="streamers-dropdown">
-                                    <p style="color: #adadb8; margin: 5px 0;">⏳ Cargando transmisiones masivas...</p>
-                                </div>
+                                <div id="dropdown-${{juego.id}}" class="streamers-dropdown"></div>
                             </div>
                         `;
-                    });
+                    }});
                     contenedorJuegos.innerHTML = html;
-                } catch (e) {
-                    contenedorJuegos.innerHTML = "<p style='color: #eb0400;'>❌ Error al obtener el Top de juegos.</p>";
-                }
-            }
+                }} catch (e) {{}}
+            }}
 
-            // FUNCIÓN PARA DESPLEGAR Y CARGAR STREAMERS DEL JUEGO SELECCIONADO
-            async function toggleStreamers(gameId) {
-                const dropdown = document.getElementById(`dropdown-${gameId}`);
-                
-                // Si ya está visible, lo ocultamos
-                if (dropdown.style.display === "block") {
-                    dropdown.style.display = "none";
-                    return;
-                }
-
-                // Si está oculto, lo mostramos y consultamos la API
+            async function toggleStreamers(gameId) {{
+                const dropdown = document.getElementById(`dropdown-${{gameId}}`);
+                if (dropdown.style.display === "block") {{ dropdown.style.display = "none"; return; }}
                 dropdown.style.display = "block";
-                
-                try {
-                    const respuesta = await fetch(`/api/top-streamers-juego/${gameId}`);
+                dropdown.innerHTML = "<p style='color: #adadb8;'>⏳ Cargando...</p>";
+                try {{
+                    const respuesta = await fetch(`/api/top-streamers-juego/${{gameId}}`);
                     const datos = await respuesta.json();
-
-                    if (datos.status === "error" || datos.streamers.length === 0) {
-                        dropdown.innerHTML = "<p style='color: #adadb8; margin: 5px 0;'>Sin transmisiones populares en este momento.</p>";
-                        return;
-                    }
-
-                    let html = "<p style='color: #00f593; font-weight: bold; margin-top: 0; margin-bottom: 8px;'>🔥 CANALES MÁS VISTOS:</p>";
-                    datos.streamers.forEach(streamer => {
+                    let html = "";
+                    datos.streamers.forEach(s => {{
                         html += `
                             <div class="streamer-row">
                                 <div>
-                                    <span class="streamer-user">${streamer.usuario}</span>
-                                    <span class="streamer-viewers"> (${streamer.espectadores.toLocaleString()} 👁️)</span>
+                                    <span style="color:white; font-weight:bold;">${{s.usuario}}</span>
+                                    <span style="color:#00f593; font-size:12px;"> (${{s.espectadores.toLocaleString()}} 👁️)</span>
                                 </div>
-                                <a class="btn-mini-twitch" href="https://twitch.tv/${streamer.usuario.toLowerCase()}" target="_blank">🔴 Ver</a>
+                                <a class="btn-mini-twitch" href="https://twitch.tv/${{s.usuario.toLowerCase()}}" target="_blank">Ver</a>
                             </div>
                         `;
-                    });
+                    }});
                     dropdown.innerHTML = html;
-                } catch (e) {
-                    dropdown.innerHTML = "<p style='color: #eb0400; margin: 5px 0;'>Error al cargar transmisiones.</p>";
-                }
-            }
+                }} catch (e) {{}}
+            }}
 
-            window.onload = cargarTopJuegos;
+            window.onload = () => {{
+                cargarTopJuegos();
+                cargarCanalesSeguidos();
+            }};
         </script>
     </body>
     </html>
     """
     return html_content
 
-# 2. RUTA BACKEND: BÚSQUEDA INDIVIDUAL
+# --- ENDPOINTS API ---
+
+@app.get("/api/mis-seguidos")
+def api_mis_seguidos():
+    token = user_session.get("access_token")
+    usuario = user_session.get("user_info")
+    if not token or not usuario:
+        return {"status": "no_logged"}
+    
+    headers = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
+    user_id = usuario["id"]
+    
+    # Obtener canales que sigue el usuario
+    r_follows = httpx.get(f"https://api.twitch.tv/helix/channels/followed?user_id={user_id}&first=10", headers=headers)
+    if r_follows.status_code != 200:
+        return {"status": "error"}
+    
+    followed_data = r_follows.json().get("data", [])
+    if not followed_data:
+        return {"status": "ok", "seguidos": []}
+    
+    # Extraer IDs de streamers seguidos
+    broadcaster_ids = [f["broadcaster_id"] for f in followed_data]
+    
+    # Consultar si están en vivo
+    params = [("user_id", bid) for bid in broadcaster_ids]
+    r_streams = httpx.get("https://api.twitch.tv/helix/streams", headers=headers, params=params)
+    live_dict = {}
+    if r_streams.status_code == 200:
+        for stream in r_streams.json().get("data", []):
+            live_dict[stream["user_id"]] = stream.get("game_name", "En vivo")
+
+    # Consultar fotos de perfil de los streamers
+    r_users = httpx.get("https://api.twitch.tv/helix/users", headers=headers, params=params)
+    avatar_dict = {}
+    if r_users.status_code == 200:
+        for u in r_users.json().get("data", []):
+            avatar_dict[u["id"]] = u.get("profile_image_url")
+
+    resultado = []
+    for f in followed_data:
+        bid = f["broadcaster_id"]
+        is_live = bid in live_dict
+        resultado.append({
+            "usuario": f["broadcaster_name"],
+            "avatar": avatar_dict.get(bid, ""),
+            "en_vivo": is_live,
+            "juego": live_dict.get(bid, "")
+        })
+
+    # Ordenar: primero los que están en vivo
+    resultado.sort(key=lambda x: x["en_vivo"], reverse=True)
+    return {"status": "ok", "seguidos": resultado}
+
 @app.get("/api/buscar/{nombre_streamer}")
 def api_buscar(nombre_streamer: str):
-    try:
-        token = obtener_token()
-        if not token:
-            return {"status": "error", "mensaje": "No se pudo obtener el token"}
-        
-        url_streams = "https://api.twitch.tv/helix/streams"
-        cabeceras = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
-        parametros = {"user_login": nombre_streamer.strip().lower()}
-        
-        respuesta = httpx.get(url_streams, headers=cabeceras, params=parametros, follow_redirects=True)
-        
-        if respuesta.status_code == 200:
-            datos = respuesta.json().get("data", [])
-            if not datos:
-                return {"en_vivo": False}
-            
-            stream = datos[0]
-            return {
-                "en_vivo": True,
-                "juego": stream.get("game_name", "Sin información"),
-                "titulo": stream.get("title", "Sin título"),
-                "espectadores": stream.get("viewer_count", 0)
-            }
-        return {"status": "error", "mensaje": f"Twitch HTTP {respuesta.status_code}"}
-    except Exception as e:
-        return {"status": "error", "mensaje": str(e)}
+    token = obtener_app_token()
+    if not token:
+        return {"status": "error"}
+    headers = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
+    r = httpx.get(f"https://api.twitch.tv/helix/streams?user_login={nombre_streamer.strip().lower()}", headers=headers)
+    if r.status_code == 200:
+        datos = r.json().get("data", [])
+        if not datos: return {"en_vivo": False}
+        s = datos[0]
+        return {"en_vivo": True, "juego": s.get("game_name"), "espectadores": s.get("viewer_count")}
+    return {"status": "error"}
 
-# 3. RUTA BACKEND: TOP 5 JUEGOS
 @app.get("/api/top-juegos")
 def api_top_juegos():
-    try:
-        token = obtener_token()
-        if not token:
-            return {"status": "error", "mensaje": "No se pudo obtener el token"}
-        
-        url_top = "https://api.twitch.tv/helix/games/top?first=5"
-        cabeceras = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
-        
-        respuesta = httpx.get(url_top, headers=cabeceras, follow_redirects=True)
-        
-        if respuesta.status_code == 200:
-            lista_juegos = respuesta.json().get("data", [])
-            resultado = []
-            for juego in lista_juegos:
-                portada_url = juego.get("box_art_url", "").replace("{width}", "90").replace("{height}", "120")
-                resultado.append({
-                    "id": juego.get("id"),
-                    "nombre": juego.get("name"),
-                    "portada": portada_url
-                })
-            return {"status": "ok", "juegos": resultado}
-            
-        return {"status": "error", "mensaje": f"Twitch HTTP {respuesta.status_code}"}
-    except Exception as e:
-        return {"status": "error", "mensaje": str(e)}
+    token = obtener_app_token()
+    if not token: return {"status": "error"}
+    headers = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
+    r = httpx.get("https://api.twitch.tv/helix/games/top?first=5", headers=headers)
+    if r.status_code == 200:
+        juegos = [{"id": j["id"], "nombre": j["name"], "portada": j["box_art_url"].replace("{width}", "90").replace("{height}", "120")} for j in r.json().get("data", [])]
+        return {"status": "ok", "juegos": juegos}
+    return {"status": "error"}
 
-# 4. NUEVO BACKEND: TOP 3 STREAMERS POR ID DE JUEGO
 @app.get("/api/top-streamers-juego/{game_id}")
 def api_top_streamers_juego(game_id: str):
-    try:
-        token = obtener_token()
-        if not token:
-            return {"status": "error", "mensaje": "No se pudo obtener el token"}
-        
-        # Consultamos los 3 streams con más espectadores para este juego
-        url_streams_juego = f"https://api.twitch.tv/helix/streams?game_id={game_id}&first=3"
-        cabeceras = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
-        
-        respuesta = httpx.get(url_streams_juego, headers=cabeceras, follow_redirects=True)
-        
-        if respuesta.status_code == 200:
-            lista_streams = respuesta.json().get("data", [])
-            resultado = []
-            for stream in lista_streams:
-                resultado.append({
-                    "usuario": stream.get("user_name"),
-                    "espectadores": stream.get("viewer_count", 0)
-                })
-            return {"status": "ok", "streamers": resultado}
-            
-        return {"status": "error", "mensaje": f"Twitch HTTP {respuesta.status_code}"}
-    except Exception as e:
-        return {"status": "error", "mensaje": str(e)}
+    token = obtener_app_token()
+    if not token: return {"status": "error"}
+    headers = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
+    r = httpx.get(f"https://api.twitch.tv/helix/streams?game_id={game_id}&first=3", headers=headers)
+    if r.status_code == 200:
+        streamers = [{"usuario": s["user_name"], "espectadores": s["viewer_count"]} for s in r.json().get("data", [])]
+        return {"status": "ok", "streamers": streamers}
+    return {"status": "error"}
 
 if __name__ == "__main__":
     import uvicorn
