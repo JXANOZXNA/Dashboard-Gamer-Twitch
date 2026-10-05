@@ -63,7 +63,6 @@ def callback(code: str = None):
         token_usuario = r.json().get("access_token")
         user_session["access_token"] = token_usuario
         
-        # Obtener información del perfil del usuario
         headers = {"Client-Id": cid, "Authorization": f"Bearer {token_usuario}"}
         r_user = httpx.get("https://api.twitch.tv/helix/users", headers=headers)
         if r_user.status_code == 200:
@@ -84,7 +83,6 @@ def logout():
 def inicio():
     usuario = user_session.get("user_info")
     
-    # Bloque de usuario / Login
     if usuario:
         user_header = f"""
             <div class="user-profile">
@@ -112,12 +110,23 @@ def inicio():
                 display: flex; min-height: 100vh; margin: 0; box-sizing: border-box;
             }}
 
+            /* LOGO CABECERA DE SIDEBAR */
+            .brand-logo {{
+                display: flex; align-items: center; gap: 8px; text-decoration: none;
+                color: #9147ff; font-weight: bold; font-size: 18px; margin-bottom: 20px;
+                padding: 6px 10px; border-radius: 8px; background-color: #141416;
+                border: 1px solid #2a2a30; transition: background-color 0.2s, transform 0.1s;
+                cursor: pointer;
+            }}
+            .brand-logo:hover {{ background-color: #26262c; color: #00f593; }}
+            .brand-logo:active {{ transform: scale(0.98); }}
+
             /* BARRA LATERAL IZQUIERDA (SIDEBAR) */
             .sidebar {{
                 width: 280px; background-color: #1f1f23; border-right: 2px solid #2a2a30;
                 padding: 20px; display: flex; flex-direction: column; flex-shrink: 0;
             }}
-            .sidebar h3 {{ color: #9147ff; font-size: 14px; text-transform: uppercase; margin-top: 0; letter-spacing: 1px; }}
+            .sidebar h3 {{ color: #9147ff; font-size: 13px; text-transform: uppercase; margin-top: 0; letter-spacing: 1px; }}
             .followed-list {{ list-style: none; padding: 0; margin: 0; }}
             .followed-item {{
                 display: flex; align-items: center; gap: 10px; padding: 8px 10px;
@@ -135,7 +144,7 @@ def inicio():
 
             /* CONTENIDO PRINCIPAL */
             .main-content {{
-                flex-grow: 1; padding: 30px; display: flex; flex-direction: column; align-items: center;
+                flex-grow: 1; padding: 30px; display: flex; flex-direction: column; align-items: center; width: 100%;
             }}
             .top-bar {{ width: 100%; max-width: 520px; display: flex; justify-content: flex-end; margin-bottom: 20px; }}
             .user-profile {{ display: flex; align-items: center; gap: 10px; background: #1f1f23; padding: 6px 14px; border-radius: 20px; border: 1px solid #9147ff; }}
@@ -191,10 +200,27 @@ def inicio():
             .streamer-row {{ display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #26262c; }}
             .streamer-row:last-child {{ border-bottom: none; }}
             .btn-mini-twitch {{ background-color: #9147ff; color: white; text-decoration: none; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }}
+
+            /* 📱 ADAPTABILIDAD PARA DISPOSITIVOS MÓVILES (RESPONSIVE) */
+            @media (max-width: 768px) {{
+                body {{ flex-direction: column; }}
+                .sidebar {{
+                    width: 100%; border-right: none; border-bottom: 2px solid #2a2a30;
+                    box-sizing: border-box; padding: 15px;
+                }}
+                .main-content {{ padding: 15px; }}
+                .container, .games-container, .top-bar {{ max-width: 100%; }}
+                .search-box {{ flex-direction: column; }}
+                input[type="text"] {{ width: 100%; box-sizing: border-box; }}
+                button {{ width: 100%; }}
+            }}
         </style>
     </head>
     <body>
         <div class="sidebar">
+            <a href="/" class="brand-logo" title="Clic para refrescar la app">
+                🎮 GAMER HUB <span style="font-size: 11px; color: #adadb8;">🔄</span>
+            </a>
             <h3>🔴 CANALES SEGUIDOS</h3>
             <div id="listaSeguidos">
                 <p style="color: #adadb8; font-size: 12px;">Inicia sesión con Twitch para ver los canales que sigues en tiempo real.</p>
@@ -357,7 +383,6 @@ def api_mis_seguidos():
     headers = {"Client-Id": cid, "Authorization": f"Bearer {token}"}
     user_id = usuario["id"]
     
-    # Obtener canales que sigue el usuario
     r_follows = httpx.get(f"https://api.twitch.tv/helix/channels/followed?user_id={user_id}&first=10", headers=headers)
     if r_follows.status_code != 200:
         return {"status": "error"}
@@ -368,7 +393,6 @@ def api_mis_seguidos():
     
     broadcaster_ids = [f["broadcaster_id"] for f in followed_data]
     
-    # Consultar si están en vivo (y traer juego + título)
     params = [("user_id", bid) for bid in broadcaster_ids]
     r_streams = httpx.get("https://api.twitch.tv/helix/streams", headers=headers, params=params)
     live_dict = {}
@@ -379,7 +403,6 @@ def api_mis_seguidos():
                 "titulo": stream.get("title", "")
             }
 
-    # Consultar fotos de perfil
     r_users = httpx.get("https://api.twitch.tv/helix/users", headers=headers, params=params)
     avatar_dict = {}
     if r_users.status_code == 200:
@@ -399,7 +422,6 @@ def api_mis_seguidos():
             "titulo": stream_info.get("titulo", "")
         })
 
-    # Ordenar: primero los que están en vivo
     resultado.sort(key=lambda x: x["en_vivo"], reverse=True)
     return {"status": "ok", "seguidos": resultado}
 
@@ -446,4 +468,5 @@ def api_top_streamers_juego(game_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app:app", host="127.0.0.1", port=5000, reload=True)
+    # Cambiado a 0.0.0.0 para escuchar en toda la red local (Móviles / PC)
+    uvicorn.run("app:app", host="0.0.0.0", port=5000, reload=True)
